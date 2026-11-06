@@ -1306,10 +1306,17 @@ class Encryption:
             _get_entry(encryption_entry, "/Length", expected_types=(int, float), type_name="number", default=40)
         )
         if alg_ver == 4 and stm_filter == "/AESV2" and stm_crypt_filter is not None:
-            # CF /Length is in bytes (default 16 for AES-128), convert to bits
-            key_bits = int(
+            cf_length = int(
                 _get_entry(stm_crypt_filter, "/Length", expected_types=(int, float), type_name="number", default=16)
-            ) * 8
+            )
+            # CF /Length is usually written in bytes (default 16 for AES-128), but some writers
+            # use bits as ISO 32000-1:2008, Table 25 states. No key is longer than 16 bytes here.
+            key_bits = cf_length * 8 if cf_length <= 16 else cf_length
+        if key_bits % 8 != 0 or not (40 <= key_bits <= 128 or key_bits == 256):
+            # ISO 32000-1:2008, 7.6.2 limits legacy key lengths to 40 to 128 bits
+            # in 8-bit increments. ISO 32000-2:2020, 7.6.6 allows 256-bit
+            # AESV3 keys. Reject other lengths before they reach cryptography.
+            raise PdfReadError(f"Invalid encryption key length: {key_bits} bits")
         encrypt_metadata = encryption_entry.get("/EncryptMetadata", NullObject()).get_object()
         if isinstance(encrypt_metadata, BooleanObject):
             encrypt_metadata = encrypt_metadata.value
