@@ -1,0 +1,25 @@
+name: probe-latest
+on:
+  push:
+    branches: [probe-latest]
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        py: ["3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.py }}
+      - name: install with the newest dependencies
+        run: |
+          python -m pip install -U pip
+          pip install -e ".[dev,test,tests,full,all]" || pip install -e ".[dev]" || pip install -e ".[test]" || pip install -e .
+          pip install -U pytest
+          pip install -U --upgrade-strategy eager -e . || true
+          pip list
+      - name: tests with warnings shown
+        run: python -m pytest -q -rfEw -W default -p no:cacheprovider --maxfail=50 2>&1 | tail -150
